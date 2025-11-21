@@ -6,12 +6,10 @@ plugins {
 }
 
 android {
-    // PENTING: Namespace baru
     namespace = "com.example.geojournal"
-    compileSdk = 35
+    compileSdk = 35 // Kita tetap di 35 (Stable)
 
     defaultConfig {
-        // PENTING: ID Aplikasi baru
         applicationId = "com.example.geojournal"
         minSdk = 24
         targetSdk = 35
@@ -43,16 +41,24 @@ android {
 }
 
 dependencies {
-    implementation(libs.androidx.core.ktx)
-    implementation(libs.androidx.lifecycle.runtime.ktx)
-    implementation(libs.androidx.activity.compose)
+    // --- PERBAIKAN: GUNAKAN VERSI STABIL (Agar tidak minta SDK 36) ---
+    // Menggantikan libs.androidx.core.ktx
+    implementation("androidx.core:core-ktx:1.13.1")
+
+    // Menggantikan libs.androidx.activity.compose
+    implementation("androidx.activity:activity-compose:1.9.2")
+
+    // Menggantikan libs.androidx.lifecycle...
+    implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.4")
+
+    // Dependensi Standar Lainnya
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.compose.ui)
     implementation(libs.androidx.compose.ui.graphics)
     implementation(libs.androidx.compose.ui.tooling.preview)
     implementation(libs.androidx.compose.material3)
 
-    // Navigasi
+    // --- Photo Journal Features ---
     implementation("androidx.navigation:navigation-compose:2.8.0")
 
     // Room Database
@@ -73,6 +79,15 @@ dependencies {
     implementation("com.google.maps.android:maps-compose:4.3.3")
     implementation("com.google.android.gms:play-services-maps:18.2.0")
 
-    // Coil (Gambar)
+    // Coil
     implementation("io.coil-kt:coil-compose:2.7.0")
+
+    // Testing
+    testImplementation(libs.junit)
+    androidTestImplementation(libs.androidx.junit)
+    androidTestImplementation(libs.androidx.espresso.core)
+    androidTestImplementation(platform(libs.androidx.compose.bom))
+    androidTestImplementation(libs.androidx.compose.ui.test.junit4)
+    debugImplementation(libs.androidx.compose.ui.tooling)
+    debugImplementation(libs.androidx.compose.ui.test.manifest)
 }
