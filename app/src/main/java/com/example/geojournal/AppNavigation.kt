@@ -2,7 +2,7 @@ package com.example.geojournal
 
 import android.net.Uri
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState // PERBAIKAN: Import ini
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
@@ -15,7 +15,7 @@ fun JournalAppNavigation() {
     val navController = rememberNavController()
 
     NavHost(navController = navController, startDestination = "home") {
-        // Halaman Utama
+        // --- HOME ---
         composable("home") {
             HomeScreen(
                 onNavigateToAdd = { navController.navigate("add") },
@@ -24,7 +24,7 @@ fun JournalAppNavigation() {
             )
         }
 
-        // Halaman Tambah/Edit
+        // --- ADD / EDIT JOURNAL ---
         composable(
             route = "add?id={id}",
             arguments = listOf(navArgument("id") {
@@ -34,32 +34,52 @@ fun JournalAppNavigation() {
         ) { backStackEntry ->
             val id = backStackEntry.arguments?.getInt("id") ?: -1
 
-            // PERBAIKAN: Menggunakan getStateFlow agar tidak butuh library LiveData
             val savedStateHandle = backStackEntry.savedStateHandle
+
+            // 1. Menerima Data Foto (URI)
             val capturedUriString by savedStateHandle.getStateFlow<String?>("captured_image_uri", null).collectAsState()
+
+            // 2. Menerima Data Lokasi (Lat & Lon) - FITUR BARU
+            val pickedLat by savedStateHandle.getStateFlow<Double?>("picked_lat", null).collectAsState()
+            val pickedLon by savedStateHandle.getStateFlow<Double?>("picked_lon", null).collectAsState()
 
             AddJournalScreen(
                 onBack = { navController.popBackStack() },
                 journalId = id,
                 capturedImageUri = capturedUriString?.let { Uri.parse(it) },
-                onNavigateToCamera = { navController.navigate("camera") }
+                pickedLocation = if (pickedLat != null && pickedLon != null) Pair(pickedLat!!, pickedLon!!) else null, // Kirim ke Screen
+                onNavigateToCamera = { navController.navigate("camera") },
+                onNavigateToMapPicker = { navController.navigate("pick_location") } // Navigasi ke Map Picker
             )
         }
 
-        // Halaman Peta Travel
+        // --- GLOBAL MAP ---
         composable("map") {
             TravelMapScreen(
                 onBack = { navController.popBackStack() }
             )
         }
 
-        // Halaman Kamera
+        // --- CAMERA ---
         composable("camera") {
             CameraScreen(
                 onImageCaptured = { uri ->
                     navController.previousBackStackEntry
                         ?.savedStateHandle
                         ?.set("captured_image_uri", uri.toString())
+                    navController.popBackStack()
+                },
+                onBack = { navController.popBackStack() }
+            )
+        }
+
+        // --- LOCATION PICKER (BARU) ---
+        composable("pick_location") {
+            LocationPickerScreen(
+                onLocationSelected = { lat, lon ->
+                    // Simpan hasil ke SavedStateHandle milik AddJournalScreen
+                    navController.previousBackStackEntry?.savedStateHandle?.set("picked_lat", lat)
+                    navController.previousBackStackEntry?.savedStateHandle?.set("picked_lon", lon)
                     navController.popBackStack()
                 },
                 onBack = { navController.popBackStack() }

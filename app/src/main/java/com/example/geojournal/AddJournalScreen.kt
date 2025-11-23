@@ -15,8 +15,10 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Menu // PERBAIKAN: Ikon pengganti
+import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.LocationOn
+import androidx.compose.material.icons.filled.Person // PERBAIKAN: Pengganti icon MyLocation
+// Hapus import Map dan MyLocation yang menyebabkan error
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -44,7 +46,9 @@ fun AddJournalScreen(
     onBack: () -> Unit,
     journalId: Int,
     capturedImageUri: Uri? = null,
-    onNavigateToCamera: () -> Unit
+    pickedLocation: Pair<Double, Double>? = null,
+    onNavigateToCamera: () -> Unit,
+    onNavigateToMapPicker: () -> Unit
 ) {
     val context = LocalContext.current
 
@@ -60,7 +64,10 @@ fun AddJournalScreen(
     var locationStatus by remember { mutableStateOf("Add Location") }
     var isLocationLoading by remember { mutableStateOf(false) }
     var isEditMode by remember { mutableStateOf(false) }
+
+    // Dialog States
     var showImageSourceDialog by remember { mutableStateOf(false) }
+    var showLocationSourceDialog by remember { mutableStateOf(false) }
 
     // 1. Handle Hasil Foto dari Kamera
     LaunchedEffect(capturedImageUri) {
@@ -70,7 +77,16 @@ fun AddJournalScreen(
         }
     }
 
-    // 2. Load Data jika Edit Mode
+    // 2. Handle Hasil Lokasi dari Map Picker
+    LaunchedEffect(pickedLocation) {
+        if (pickedLocation != null) {
+            latitude = pickedLocation.first
+            longitude = pickedLocation.second
+            locationStatus = "Location Picked ✓"
+        }
+    }
+
+    // 3. Load Data jika Edit Mode
     LaunchedEffect(journalId) {
         if (journalId != -1) {
             isEditMode = true
@@ -82,9 +98,12 @@ fun AddJournalScreen(
                 if (journal.photoUri.isNotEmpty()) {
                     selectedImageUri = Uri.parse(journal.photoUri)
                 }
-                latitude = journal.latitude
-                longitude = journal.longitude
-                if (latitude != null) locationStatus = "Location Saved ✓"
+                // Hanya load latitude/longitude jika belum ada perubahan baru dari Picker
+                if (latitude == null) {
+                    latitude = journal.latitude
+                    longitude = journal.longitude
+                    if (latitude != null) locationStatus = "Location Saved ✓"
+                }
             }
         }
     }
@@ -102,7 +121,7 @@ fun AddJournalScreen(
             getCurrentLocation(context, fusedLocationClient) { lat, lon ->
                 latitude = lat
                 longitude = lon
-                locationStatus = "Location Saved ✓"
+                locationStatus = "GPS Location Saved ✓"
                 isLocationLoading = false
             }
         } else {
@@ -110,7 +129,6 @@ fun AddJournalScreen(
         }
     }
 
-    // Photo Picker (Galeri)
     val photoPickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.PickVisualMedia()
     ) { uri: Uri? ->
@@ -121,23 +139,17 @@ fun AddJournalScreen(
         }
     }
 
-    // Permission Kamera
     val cameraPermissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission()
     ) { isGranted ->
-        if (isGranted) {
-            onNavigateToCamera()
-        } else {
-            Toast.makeText(context, "Izin kamera diperlukan", Toast.LENGTH_SHORT).show()
-        }
+        if (isGranted) onNavigateToCamera() else Toast.makeText(context, "Camera permission needed", Toast.LENGTH_SHORT).show()
     }
 
-    // UI Structure (Dialog Pilihan)
+    // --- DIALOG PILIHAN GAMBAR ---
     if (showImageSourceDialog) {
         AlertDialog(
             onDismissRequest = { showImageSourceDialog = false },
             title = { Text("Choose Image Source") },
-            text = { Text("Take a new photo or select from gallery?") },
             confirmButton = {
                 TextButton(onClick = {
                     showImageSourceDialog = false
@@ -146,25 +158,62 @@ fun AddJournalScreen(
                     } else {
                         cameraPermissionLauncher.launch(Manifest.permission.CAMERA)
                     }
-                }) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Default.Add, null, modifier = Modifier.size(16.dp)) // Placeholder Icon
-                        Spacer(Modifier.width(4.dp))
-                        Text("Camera")
-                    }
-                }
+                }) { Text("Camera") }
             },
             dismissButton = {
                 TextButton(onClick = {
                     showImageSourceDialog = false
-                    photoPickerLauncher.launch(
-                        PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
-                    )
+                    photoPickerLauncher.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+                }) { Text("Gallery") }
+            },
+            containerColor = Color(0xFF2C2C2C),
+            titleContentColor = Color.White
+        )
+    }
+
+    // --- DIALOG PILIHAN LOKASI ---
+    if (showLocationSourceDialog) {
+        AlertDialog(
+            onDismissRequest = { showLocationSourceDialog = false },
+            title = { Text("Choose Location Method") },
+            text = { Text("Use current GPS location or pick from map?") },
+            confirmButton = {
+                // OPSI 1: PICK ON MAP
+                TextButton(onClick = {
+                    showLocationSourceDialog = false
+                    onNavigateToMapPicker()
                 }) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Default.Menu, null, modifier = Modifier.size(16.dp)) // Placeholder Icon
+                        // PERBAIKAN: Menggunakan icon LocationOn sebagai pengganti Map
+                        Icon(Icons.Default.LocationOn, null, modifier = Modifier.size(16.dp))
                         Spacer(Modifier.width(4.dp))
-                        Text("Gallery")
+                        Text("Pick on Map")
+                    }
+                }
+            },
+            dismissButton = {
+                // OPSI 2: USE GPS
+                TextButton(onClick = {
+                    showLocationSourceDialog = false
+                    if (ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
+                        isLocationLoading = true
+                        getCurrentLocation(context, fusedLocationClient) { lat, lon ->
+                            latitude = lat
+                            longitude = lon
+                            locationStatus = "GPS Location Saved ✓"
+                            isLocationLoading = false
+                        }
+                    } else {
+                        locationPermissionLauncher.launch(
+                            arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION)
+                        )
+                    }
+                }) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        // PERBAIKAN: Menggunakan icon Person sebagai pengganti MyLocation
+                        Icon(Icons.Default.Person, null, modifier = Modifier.size(16.dp))
+                        Spacer(Modifier.width(4.dp))
+                        Text("Use GPS")
                     }
                 }
             },
@@ -180,9 +229,7 @@ fun AddJournalScreen(
             TopAppBar(
                 title = { Text(if (isEditMode) "Edit Entry" else "New Entry", color = Color.White) },
                 navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back", tint = Color.White)
-                    }
+                    IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back", tint = Color.White) }
                 },
                 actions = {
                     TextButton(onClick = {
@@ -197,13 +244,9 @@ fun AddJournalScreen(
             )
         }
     ) { padding ->
-        Column(
-            modifier = Modifier
-                .padding(padding)
-                .fillMaxSize()
-                .padding(16.dp)
-        ) {
-            // Box Gambar (Klik untuk muncul Dialog)
+        Column(modifier = Modifier.padding(padding).fillMaxSize().padding(16.dp)) {
+
+            // Box Gambar
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -230,26 +273,14 @@ fun AddJournalScreen(
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // Tombol Lokasi
+            // Tombol Lokasi (Sekarang membuka Dialog)
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(8.dp))
                     .background(if (latitude != null) Color(0xFF2C2C2C) else Color.Transparent)
                     .clickable {
-                        if (ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
-                            isLocationLoading = true
-                            getCurrentLocation(context, fusedLocationClient) { lat, lon ->
-                                latitude = lat
-                                longitude = lon
-                                locationStatus = "Location Saved ✓"
-                                isLocationLoading = false
-                            }
-                        } else {
-                            locationPermissionLauncher.launch(
-                                arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION)
-                            )
-                        }
+                        showLocationSourceDialog = true
                     }
                     .padding(vertical = 8.dp),
                 verticalAlignment = Alignment.CenterVertically
@@ -266,7 +297,7 @@ fun AddJournalScreen(
                     Text("Getting location...", color = Color.Gray, fontSize = 14.sp)
                 } else {
                     Text(
-                        text = if (latitude != null) locationStatus else "Add/Update Location",
+                        text = if (latitude != null) locationStatus else "Add Location",
                         color = if (latitude != null) Color.White else Color.Gray,
                         fontWeight = if (latitude != null) FontWeight.Bold else FontWeight.Normal,
                         fontSize = 14.sp
@@ -314,7 +345,7 @@ fun AddJournalScreen(
     }
 }
 
-// Helper Functions
+// Fungsi Helper
 fun getCurrentLocation(
     context: Context,
     fusedLocationClient: com.google.android.gms.location.FusedLocationProviderClient,
