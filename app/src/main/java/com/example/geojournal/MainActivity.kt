@@ -7,10 +7,18 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.ui.Modifier
+import org.osmdroid.config.Configuration
+import com.example.geojournal.BuildConfig
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        // --- INISIALISASI OPENSTREETMAP ---
+        // Penting agar peta bisa tampil user agent harus diset
+        Configuration.getInstance().userAgentValue = BuildConfig.APPLICATION_ID
+        // ----------------------------------
+
         setContent {
             MaterialTheme {
                 Surface(

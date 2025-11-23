@@ -37,31 +37,22 @@ android {
     }
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 }
 
 dependencies {
-    // --- PERBAIKAN: GUNAKAN VERSI STABIL (Agar tidak minta SDK 36) ---
-    // Menggantikan libs.androidx.core.ktx
     implementation("androidx.core:core-ktx:1.13.1")
-
-    // Menggantikan libs.androidx.activity.compose
     implementation("androidx.activity:activity-compose:1.9.2")
-
-    // Menggantikan libs.androidx.lifecycle...
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.4")
-
-    // Dependensi Standar Lainnya
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.compose.ui)
     implementation(libs.androidx.compose.ui.graphics)
     implementation(libs.androidx.compose.ui.tooling.preview)
     implementation(libs.androidx.compose.material3)
-
-    // --- Photo Journal Features ---
     implementation("androidx.navigation:navigation-compose:2.8.0")
 
-    // Room Database
+    // Room
     val roomVersion = "2.6.1"
     implementation("androidx.room:room-runtime:$roomVersion")
     implementation("androidx.room:room-ktx:$roomVersion")
@@ -74,10 +65,13 @@ dependencies {
     implementation("androidx.camera:camera-lifecycle:$cameraVersion")
     implementation("androidx.camera:camera-view:$cameraVersion")
 
-    // Maps & Location
+    // Location (Tetap butuh ini untuk mendapatkan koordinat GPS)
     implementation("com.google.android.gms:play-services-location:21.2.0")
-    implementation("com.google.maps.android:maps-compose:4.3.3")
-    implementation("com.google.android.gms:play-services-maps:18.2.0")
+
+    // --- PERUBAHAN DI SINI ---
+    // Hapus Google Maps, ganti dengan OpenStreetMap (osmdroid)
+    implementation("org.osmdroid:osmdroid-android:6.1.18")
+    // -------------------------
 
     // Coil
     implementation("io.coil-kt:coil-compose:2.7.0")

@@ -8,22 +8,27 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
+import org.osmdroid.tileprovider.tilesource.TileSourceFactory
+import org.osmdroid.util.GeoPoint
+import org.osmdroid.views.MapView
+import org.osmdroid.views.overlay.Marker
 import java.text.SimpleDateFormat
 import java.util.Locale
 
@@ -35,11 +40,11 @@ fun HomeScreen(
     val journals by viewModel.allJournals.collectAsState()
 
     Scaffold(
-        containerColor = Color(0xFF121212), // Background Gelap
+        containerColor = Color(0xFF121212),
         floatingActionButton = {
             FloatingActionButton(
                 onClick = onNavigateToAdd,
-                containerColor = Color(0xFF6C5DD3), // Warna Ungu aksen
+                containerColor = Color(0xFF6C5DD3),
                 contentColor = Color.White,
                 shape = CircleShape
             ) {
@@ -53,44 +58,33 @@ fun HomeScreen(
                 .fillMaxSize()
                 .padding(16.dp)
         ) {
-            // Header: Title & Icons
+            // Header
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(
-                    text = "Journal",
-                    fontSize = 32.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = Color.White
-                )
+                Text("Journal", fontSize = 32.sp, fontWeight = FontWeight.Bold, color = Color.White)
                 Row {
-                    IconButton(onClick = { }) {
-                        Icon(Icons.Default.Search, contentDescription = "Search", tint = Color.Gray)
-                    }
-                    IconButton(onClick = { }) {
-                        Icon(Icons.Default.MoreVert, contentDescription = "Menu", tint = Color.Gray)
-                    }
+                    IconButton(onClick = { }) { Icon(Icons.Default.Search, "Search", tint = Color.Gray) }
+                    IconButton(onClick = { }) { Icon(Icons.Default.MoreVert, "Menu", tint = Color.Gray) }
                 }
             }
 
             Spacer(modifier = Modifier.height(20.dp))
 
-            // Stats Row (Dummy Data sesuai screenshot)
+            // Stats
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                StatItem(count = journals.size.toString(), label = "Entries")
-                StatItem(count = "0", label = "Words Written") // Bisa dihitung nanti
-                StatItem(count = "0", label = "Days Journaled")
+                StatItem(journals.size.toString(), "Entries")
+                StatItem("0", "Words Written")
+                StatItem("0", "Days Journaled")
             }
 
             Spacer(modifier = Modifier.height(24.dp))
-
-            Text("Today", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 18.sp)
-
+            Text("Your Entries", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 18.sp)
             Spacer(modifier = Modifier.height(12.dp))
 
-            // List Journal
+            // List
             LazyColumn(verticalArrangement = Arrangement.spacedBy(16.dp)) {
                 items(journals) { journal ->
                     JournalCard(journal)
@@ -103,8 +97,8 @@ fun HomeScreen(
 @Composable
 fun StatItem(count: String, label: String) {
     Column {
-        Text(text = count, color = Color(0xFF6C5DD3), fontWeight = FontWeight.Bold, fontSize = 18.sp)
-        Text(text = label, color = Color.Gray, fontSize = 12.sp)
+        Text(count, color = Color(0xFF6C5DD3), fontWeight = FontWeight.Bold, fontSize = 18.sp)
+        Text(label, color = Color.Gray, fontSize = 12.sp)
     }
 }
 
@@ -116,7 +110,6 @@ fun JournalCard(journal: JournalEntity) {
         modifier = Modifier.fillMaxWidth()
     ) {
         Column(modifier = Modifier.padding(12.dp)) {
-            // Row Gambar & Peta
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -124,55 +117,94 @@ fun JournalCard(journal: JournalEntity) {
                     .clip(RoundedCornerShape(12.dp))
             ) {
                 // Foto (Kiri)
-                AsyncImage(
-                    model = journal.photoUri, // URI gambar dari database
-                    contentDescription = "Photo",
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier
-                        .weight(1f)
-                        .fillMaxHeight()
-                        .background(Color.DarkGray)
-                )
+                if (journal.photoUri.isNotEmpty()) {
+                    AsyncImage(
+                        model = journal.photoUri,
+                        contentDescription = "Photo",
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxHeight()
+                            .background(Color.DarkGray)
+                    )
+                } else {
+                    Box(Modifier.weight(1f).fillMaxHeight().background(Color(0xFF2C2C2C)), contentAlignment = Alignment.Center) {
+                        Text("No Photo", color = Color.Gray)
+                    }
+                }
 
                 Spacer(modifier = Modifier.width(4.dp))
 
-                // Peta / Lokasi (Kanan - Placeholder)
+                // Peta OSM (Kanan)
                 Box(
                     modifier = Modifier
                         .weight(1f)
                         .fillMaxHeight()
-                        .background(Color(0xFF2C2C2C)),
-                    contentAlignment = Alignment.Center
+                        .background(Color(0xFF2C2C2C))
                 ) {
-                    Text("Map View", color = Color.Gray, fontSize = 12.sp)
-                    // Nanti ganti ini dengan Google Maps Lite Mode
+                    if (journal.latitude != null && journal.longitude != null) {
+                        // Menggunakan AndroidView untuk menampilkan MapView dari osmdroid
+                        AndroidView(
+                            factory = { context ->
+                                MapView(context).apply {
+                                    setTileSource(TileSourceFactory.MAPNIK) // Style peta standar
+                                    setMultiTouchControls(true)
+                                    controller.setZoom(15.0)
+                                    // Matikan interaksi sentuh agar tidak mengganggu scroll list (Lite Mode effect)
+                                    setOnTouchListener { _, _ -> true }
+                                }
+                            },
+                            update = { mapView ->
+                                val geoPoint = GeoPoint(journal.latitude, journal.longitude)
+                                mapView.controller.setCenter(geoPoint)
+
+                                // Bersihkan overlay sebelumnya dan tambahkan marker baru
+                                mapView.overlays.clear()
+                                val marker = Marker(mapView)
+                                marker.position = geoPoint
+                                marker.title = journal.locationName
+                                marker.setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
+                                mapView.overlays.add(marker)
+                            },
+                            modifier = Modifier.fillMaxSize()
+                        )
+                    } else {
+                        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                            Text("No Location", color = Color.Gray, fontSize = 12.sp)
+                        }
+                    }
                 }
             }
 
             Spacer(modifier = Modifier.height(12.dp))
 
-            // Judul & Deskripsi
-            Text(text = journal.title, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+            Text(journal.title, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+
+            // Nama Lokasi
+            if (journal.locationName != null && journal.locationName != "Unknown Location" && journal.locationName != "No Location") {
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(vertical = 4.dp)) {
+                    Icon(Icons.Default.LocationOn, contentDescription = null, tint = Color(0xFF6C5DD3), modifier = Modifier.size(14.dp))
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text(journal.locationName, color = Color(0xFF6C5DD3), fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
+            }
+
             Text(
-                text = journal.description,
+                journal.description,
                 color = Color.LightGray,
                 fontSize = 14.sp,
-                maxLines = 2
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis
             )
 
             Spacer(modifier = Modifier.height(12.dp))
 
-            // Footer: Tanggal
             val dateFormat = SimpleDateFormat("EEEE, dd MMM", Locale.getDefault())
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                Text(
-                    text = dateFormat.format(journal.date),
-                    color = Color.Gray,
-                    fontSize = 12.sp
-                )
+                Text(dateFormat.format(journal.date), color = Color.Gray, fontSize = 12.sp)
                 Icon(Icons.Default.MoreVert, contentDescription = null, tint = Color.Gray, modifier = Modifier.size(16.dp))
             }
         }
