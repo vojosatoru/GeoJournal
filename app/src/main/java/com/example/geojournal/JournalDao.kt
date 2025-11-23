@@ -9,9 +9,13 @@ import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface JournalDao {
-    // Ambil data urut dari yang terbaru
     @Query("SELECT * FROM journal_table ORDER BY date DESC")
     fun getAllJournals(): Flow<List<JournalEntity>>
+
+    // --- TAMBAHAN UNTUK EDIT ---
+    @Query("SELECT * FROM journal_table WHERE id = :id")
+    suspend fun getJournalById(id: Int): JournalEntity?
+    // ---------------------------
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertJournal(journal: JournalEntity)

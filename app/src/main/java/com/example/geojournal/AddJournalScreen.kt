@@ -41,33 +41,51 @@ import java.io.InputStream
 @Composable
 fun AddJournalScreen(
     viewModel: JournalViewModel = viewModel(),
-    onBack: () -> Unit
+    onBack: () -> Unit,
+    journalId: Int // Parameter ID
 ) {
     val context = LocalContext.current
+
+    // State Form
     var title by remember { mutableStateOf("") }
     var description by remember { mutableStateOf("") }
-
-    // State Gambar
     var selectedImageUri by remember { mutableStateOf<Uri?>(null) }
     var savedImagePath by remember { mutableStateOf("") }
-
-    // State Lokasi
     var latitude by remember { mutableStateOf<Double?>(null) }
     var longitude by remember { mutableStateOf<Double?>(null) }
+
+    // UI State
     var locationStatus by remember { mutableStateOf("Add Location") }
     var isLocationLoading by remember { mutableStateOf(false) }
+    var isEditMode by remember { mutableStateOf(false) }
 
-    // Fused Location Client
+    // Load Data jika Edit Mode
+    LaunchedEffect(journalId) {
+        if (journalId != -1) {
+            isEditMode = true
+            val journal = viewModel.getJournalById(journalId)
+            if (journal != null) {
+                title = journal.title
+                description = journal.description
+                savedImagePath = journal.photoUri
+                if (journal.photoUri.isNotEmpty()) {
+                    selectedImageUri = Uri.parse(journal.photoUri) // Untuk preview
+                }
+                latitude = journal.latitude
+                longitude = journal.longitude
+                if (latitude != null) locationStatus = "Location Saved ✓"
+            }
+        }
+    }
+
     val fusedLocationClient = remember { LocationServices.getFusedLocationProviderClient(context) }
 
-    // Launcher Izin Lokasi
     val locationPermissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestMultiplePermissions()
     ) { permissions ->
         if (permissions[Manifest.permission.ACCESS_FINE_LOCATION] == true ||
             permissions[Manifest.permission.ACCESS_COARSE_LOCATION] == true
         ) {
-            // Izin diberikan, ambil lokasi
             isLocationLoading = true
             getCurrentLocation(context, fusedLocationClient) { lat, lon ->
                 latitude = lat
@@ -80,7 +98,6 @@ fun AddJournalScreen(
         }
     }
 
-    // Launcher Gambar
     val photoPickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.PickVisualMedia()
     ) { uri: Uri? ->
@@ -95,7 +112,7 @@ fun AddJournalScreen(
         containerColor = Color(0xFF121212),
         topBar = {
             TopAppBar(
-                title = { Text("New Entry", color = Color.White) },
+                title = { Text(if (isEditMode) "Edit Entry" else "New Entry", color = Color.White) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back", tint = Color.White)
@@ -103,7 +120,9 @@ fun AddJournalScreen(
                 },
                 actions = {
                     TextButton(onClick = {
-                        viewModel.addJournal(title, description, savedImagePath, latitude, longitude)
+                        // Kirim ID (jika -1, viewModel akan pakai 0 untuk insert baru)
+                        val finalId = if (isEditMode) journalId else 0
+                        viewModel.addJournal(finalId, title, description, savedImagePath, latitude, longitude)
                         onBack()
                     }) {
                         Text("Done", color = Color(0xFF6C5DD3), style = MaterialTheme.typography.titleMedium)
@@ -119,7 +138,7 @@ fun AddJournalScreen(
                 .fillMaxSize()
                 .padding(16.dp)
         ) {
-            // --- BOX GAMBAR ---
+            // Box Gambar
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -133,9 +152,9 @@ fun AddJournalScreen(
                     },
                 contentAlignment = Alignment.Center
             ) {
-                if (selectedImageUri != null) {
+                if (selectedImageUri != null || savedImagePath.isNotEmpty()) {
                     AsyncImage(
-                        model = selectedImageUri,
+                        model = selectedImageUri ?: File(savedImagePath),
                         contentDescription = "Selected Image",
                         modifier = Modifier.fillMaxSize(),
                         contentScale = ContentScale.Crop
@@ -150,27 +169,26 @@ fun AddJournalScreen(
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // --- TOMBOL LOKASI ---
+            // Tombol Lokasi
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(8.dp))
                     .background(if (latitude != null) Color(0xFF2C2C2C) else Color.Transparent)
                     .clickable {
-                        if (latitude == null) {
-                            if (ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
-                                isLocationLoading = true
-                                getCurrentLocation(context, fusedLocationClient) { lat, lon ->
-                                    latitude = lat
-                                    longitude = lon
-                                    locationStatus = "Location Saved ✓"
-                                    isLocationLoading = false
-                                }
-                            } else {
-                                locationPermissionLauncher.launch(
-                                    arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION)
-                                )
+                        // Izinkan update lokasi saat edit juga
+                        if (ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
+                            isLocationLoading = true
+                            getCurrentLocation(context, fusedLocationClient) { lat, lon ->
+                                latitude = lat
+                                longitude = lon
+                                locationStatus = "Location Saved ✓"
+                                isLocationLoading = false
                             }
+                        } else {
+                            locationPermissionLauncher.launch(
+                                arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION)
+                            )
                         }
                     }
                     .padding(vertical = 8.dp),
@@ -188,7 +206,7 @@ fun AddJournalScreen(
                     Text("Getting location...", color = Color.Gray, fontSize = 14.sp)
                 } else {
                     Text(
-                        text = if (latitude != null) locationStatus else "Add Current Location",
+                        text = if (latitude != null) locationStatus else "Add/Update Location",
                         color = if (latitude != null) Color.White else Color.Gray,
                         fontWeight = if (latitude != null) FontWeight.Bold else FontWeight.Normal,
                         fontSize = 14.sp
@@ -198,7 +216,7 @@ fun AddJournalScreen(
 
             HorizontalDivider(color = Color.DarkGray, modifier = Modifier.padding(vertical = 8.dp))
 
-            // Input Text
+            // Input Title
             TextField(
                 value = title,
                 onValueChange = { title = it },
@@ -217,6 +235,7 @@ fun AddJournalScreen(
 
             HorizontalDivider(color = Color.DarkGray)
 
+            // Input Description
             TextField(
                 value = description,
                 onValueChange = { description = it },
@@ -235,7 +254,6 @@ fun AddJournalScreen(
     }
 }
 
-// Helper: Ambil Lokasi
 @SuppressLint("MissingPermission")
 fun getCurrentLocation(
     context: Context,
@@ -247,7 +265,7 @@ fun getCurrentLocation(
             if (location != null) {
                 onLocationReceived(location.latitude, location.longitude)
             } else {
-                Toast.makeText(context, "Cannot get location. Try enabling GPS.", Toast.LENGTH_SHORT).show()
+                Toast.makeText(context, "Cannot get location", Toast.LENGTH_SHORT).show()
             }
         }
         .addOnFailureListener {
@@ -255,7 +273,6 @@ fun getCurrentLocation(
         }
 }
 
-// Helper: Simpan Gambar (Sama seperti sebelumnya)
 fun copyUriToInternalStorage(context: Context, uri: Uri): String? {
     val inputStream: InputStream? = context.contentResolver.openInputStream(uri)
     val fileName = "journal_${System.currentTimeMillis()}.jpg"

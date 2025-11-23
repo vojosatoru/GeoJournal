@@ -24,8 +24,9 @@ class JournalViewModel(application: Application) : AndroidViewModel(application)
             initialValue = emptyList()
         )
 
-    // Fungsi Tambah Data yang diperbarui
+    // Update fungsi ini agar menerima ID (default = 0 untuk baru)
     fun addJournal(
+        id: Int = 0, // 0 artinya AutoGenerate (Insert baru), selain 0 artinya Update
         title: String,
         desc: String,
         photoUri: String,
@@ -33,7 +34,6 @@ class JournalViewModel(application: Application) : AndroidViewModel(application)
         lon: Double?
     ) {
         viewModelScope.launch {
-            // Dapatkan nama lokasi dari koordinat (Geocoding)
             val addressName = if (lat != null && lon != null) {
                 getAddressFromLocation(lat, lon)
             } else {
@@ -41,6 +41,7 @@ class JournalViewModel(application: Application) : AndroidViewModel(application)
             }
 
             val journal = JournalEntity(
+                id = id, // Gunakan ID yang dikirim
                 title = title,
                 description = desc,
                 photoUri = photoUri,
@@ -48,8 +49,14 @@ class JournalViewModel(application: Application) : AndroidViewModel(application)
                 longitude = lon,
                 locationName = addressName
             )
+            // Insert dengan Strategy REPLACE akan otomatis meng-update jika ID sudah ada
             dao.insertJournal(journal)
         }
+    }
+
+    // Fungsi untuk mengambil data satu jurnal (untuk Edit Screen)
+    suspend fun getJournalById(id: Int): JournalEntity? {
+        return dao.getJournalById(id)
     }
 
     fun deleteJournal(journal: JournalEntity) {
@@ -58,7 +65,6 @@ class JournalViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
-    // Helper: Mengubah Lat/Long menjadi Alamat yang mudah dibaca
     @Suppress("DEPRECATION")
     private suspend fun getAddressFromLocation(lat: Double, lon: Double): String {
         return withContext(Dispatchers.IO) {
@@ -67,7 +73,6 @@ class JournalViewModel(application: Application) : AndroidViewModel(application)
                 val addresses = geocoder.getFromLocation(lat, lon, 1)
                 if (!addresses.isNullOrEmpty()) {
                     val address = addresses[0]
-                    // Mengambil nama jalan atau kota (Locality)
                     address.thoroughfare ?: address.locality ?: address.adminArea ?: "Unknown Location"
                 } else {
                     "Unknown Location"

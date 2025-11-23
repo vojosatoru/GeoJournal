@@ -8,6 +8,8 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Search
@@ -35,7 +37,8 @@ import java.util.Locale
 @Composable
 fun HomeScreen(
     viewModel: JournalViewModel = viewModel(),
-    onNavigateToAdd: () -> Unit
+    onNavigateToAdd: () -> Unit,
+    onNavigateToEdit: (Int) -> Unit // Callback untuk Edit
 ) {
     val journals by viewModel.allJournals.collectAsState()
 
@@ -76,18 +79,22 @@ fun HomeScreen(
             // Stats
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 StatItem(journals.size.toString(), "Entries")
-                StatItem("0", "Words Written")
-                StatItem("0", "Days Journaled")
+                StatItem("0", "Words") // Bisa dikembangkan nanti
+                StatItem("0", "Days")
             }
 
             Spacer(modifier = Modifier.height(24.dp))
             Text("Your Entries", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 18.sp)
             Spacer(modifier = Modifier.height(12.dp))
 
-            // List
+            // List Journal
             LazyColumn(verticalArrangement = Arrangement.spacedBy(16.dp)) {
                 items(journals) { journal ->
-                    JournalCard(journal)
+                    JournalCard(
+                        journal = journal,
+                        onDelete = { viewModel.deleteJournal(journal) },
+                        onEdit = { onNavigateToEdit(journal.id) }
+                    )
                 }
             }
         }
@@ -103,13 +110,20 @@ fun StatItem(count: String, label: String) {
 }
 
 @Composable
-fun JournalCard(journal: JournalEntity) {
+fun JournalCard(
+    journal: JournalEntity,
+    onDelete: () -> Unit,
+    onEdit: () -> Unit
+) {
+    var expanded by remember { mutableStateOf(false) }
+
     Card(
         colors = CardDefaults.cardColors(containerColor = Color(0xFF1E1E1E)),
         shape = RoundedCornerShape(16.dp),
         modifier = Modifier.fillMaxWidth()
     ) {
         Column(modifier = Modifier.padding(12.dp)) {
+            // Row Gambar & Peta
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -143,22 +157,18 @@ fun JournalCard(journal: JournalEntity) {
                         .background(Color(0xFF2C2C2C))
                 ) {
                     if (journal.latitude != null && journal.longitude != null) {
-                        // Menggunakan AndroidView untuk menampilkan MapView dari osmdroid
                         AndroidView(
                             factory = { context ->
                                 MapView(context).apply {
-                                    setTileSource(TileSourceFactory.MAPNIK) // Style peta standar
+                                    setTileSource(TileSourceFactory.MAPNIK)
                                     setMultiTouchControls(true)
                                     controller.setZoom(15.0)
-                                    // Matikan interaksi sentuh agar tidak mengganggu scroll list (Lite Mode effect)
-                                    setOnTouchListener { _, _ -> true }
+                                    setOnTouchListener { _, _ -> true } // Disable interaksi di list
                                 }
                             },
                             update = { mapView ->
                                 val geoPoint = GeoPoint(journal.latitude, journal.longitude)
                                 mapView.controller.setCenter(geoPoint)
-
-                                // Bersihkan overlay sebelumnya dan tambahkan marker baru
                                 mapView.overlays.clear()
                                 val marker = Marker(mapView)
                                 marker.position = geoPoint
@@ -178,9 +188,10 @@ fun JournalCard(journal: JournalEntity) {
 
             Spacer(modifier = Modifier.height(12.dp))
 
+            // Judul
             Text(journal.title, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp)
 
-            // Nama Lokasi
+            // Lokasi (jika ada)
             if (journal.locationName != null && journal.locationName != "Unknown Location" && journal.locationName != "No Location") {
                 Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(vertical = 4.dp)) {
                     Icon(Icons.Default.LocationOn, contentDescription = null, tint = Color(0xFF6C5DD3), modifier = Modifier.size(14.dp))
@@ -189,6 +200,7 @@ fun JournalCard(journal: JournalEntity) {
                 }
             }
 
+            // Deskripsi
             Text(
                 journal.description,
                 color = Color.LightGray,
@@ -199,13 +211,43 @@ fun JournalCard(journal: JournalEntity) {
 
             Spacer(modifier = Modifier.height(12.dp))
 
+            // Footer: Tanggal & Menu Dropdown
             val dateFormat = SimpleDateFormat("EEEE, dd MMM", Locale.getDefault())
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(dateFormat.format(journal.date), color = Color.Gray, fontSize = 12.sp)
-                Icon(Icons.Default.MoreVert, contentDescription = null, tint = Color.Gray, modifier = Modifier.size(16.dp))
+
+                // --- MENU DROPDOWN (EDIT / DELETE) ---
+                Box {
+                    IconButton(onClick = { expanded = true }) {
+                        Icon(Icons.Default.MoreVert, contentDescription = "Menu", tint = Color.Gray, modifier = Modifier.size(16.dp))
+                    }
+                    DropdownMenu(
+                        expanded = expanded,
+                        onDismissRequest = { expanded = false },
+                        containerColor = Color(0xFF2C2C2C)
+                    ) {
+                        DropdownMenuItem(
+                            text = { Text("Edit", color = Color.White) },
+                            onClick = {
+                                expanded = false
+                                onEdit()
+                            },
+                            leadingIcon = { Icon(Icons.Default.Edit, null, tint = Color.White) }
+                        )
+                        DropdownMenuItem(
+                            text = { Text("Delete", color = Color(0xFFFF5555)) },
+                            onClick = {
+                                expanded = false
+                                onDelete()
+                            },
+                            leadingIcon = { Icon(Icons.Default.Delete, null, tint = Color(0xFFFF5555)) }
+                        )
+                    }
+                }
             }
         }
     }
