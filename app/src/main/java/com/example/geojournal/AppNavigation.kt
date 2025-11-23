@@ -16,22 +16,30 @@ fun JournalAppNavigation() {
         composable("home") {
             HomeScreen(
                 onNavigateToAdd = { navController.navigate("add") },
-                onNavigateToEdit = { journalId -> navController.navigate("add?id=$journalId") }
+                onNavigateToEdit = { journalId -> navController.navigate("add?id=$journalId") },
+                onNavigateToMap = { navController.navigate("map") } // Navigasi ke Peta
             )
         }
 
-        // Halaman Tambah/Edit (Menerima argumen opsional id)
+        // Halaman Tambah/Edit
         composable(
             route = "add?id={id}",
             arguments = listOf(navArgument("id") {
                 type = NavType.IntType
-                defaultValue = -1 // -1 menandakan mode Tambah Baru
+                defaultValue = -1
             })
         ) { backStackEntry ->
             val id = backStackEntry.arguments?.getInt("id") ?: -1
             AddJournalScreen(
                 onBack = { navController.popBackStack() },
                 journalId = id
+            )
+        }
+
+        // Halaman Travel Map (Baru)
+        composable("map") {
+            TravelMapScreen(
+                onBack = { navController.popBackStack() }
             )
         }
     }

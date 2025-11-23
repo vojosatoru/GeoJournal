@@ -7,12 +7,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.LocationOn
-import androidx.compose.material.icons.filled.MoreVert
-import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -34,13 +29,21 @@ import org.osmdroid.views.overlay.Marker
 import java.text.SimpleDateFormat
 import java.util.Locale
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(
     viewModel: JournalViewModel = viewModel(),
     onNavigateToAdd: () -> Unit,
-    onNavigateToEdit: (Int) -> Unit // Callback untuk Edit
+    onNavigateToEdit: (Int) -> Unit,
+    onNavigateToMap: () -> Unit
 ) {
     val journals by viewModel.allJournals.collectAsState()
+    val searchQuery by viewModel.searchQuery.collectAsState()
+
+    val totalWords by viewModel.totalWords.collectAsState()
+    val totalDays by viewModel.totalDays.collectAsState()
+
+    var isSearchActive by remember { mutableStateOf(false) }
 
     Scaffold(
         containerColor = Color(0xFF121212),
@@ -61,40 +64,82 @@ fun HomeScreen(
                 .fillMaxSize()
                 .padding(16.dp)
         ) {
-            // Header
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text("Journal", fontSize = 32.sp, fontWeight = FontWeight.Bold, color = Color.White)
-                Row {
-                    IconButton(onClick = { }) { Icon(Icons.Default.Search, "Search", tint = Color.Gray) }
-                    IconButton(onClick = { }) { Icon(Icons.Default.MoreVert, "Menu", tint = Color.Gray) }
+            // --- HEADER & SEARCH BAR ---
+            if (isSearchActive) {
+                SearchBar(
+                    query = searchQuery,
+                    onQueryChange = { viewModel.onSearchQueryChanged(it) },
+                    onSearch = { isSearchActive = false },
+                    active = false,
+                    onActiveChange = { isSearchActive = it },
+                    placeholder = { Text("Search journals...") },
+                    leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
+                    trailingIcon = {
+                        IconButton(onClick = {
+                            isSearchActive = false
+                            viewModel.onSearchQueryChanged("")
+                        }) {
+                            Icon(Icons.Default.Close, contentDescription = "Close")
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth()
+                ) {}
+            } else {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("GeoJournal", fontSize = 32.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                    Row {
+                        IconButton(onClick = onNavigateToMap) {
+                            Icon(Icons.Default.Place, "Map View", tint = Color(0xFF6C5DD3))
+                        }
+                        IconButton(onClick = { isSearchActive = true }) {
+                            Icon(Icons.Default.Search, "Search", tint = Color.Gray)
+                        }
+                    }
                 }
             }
 
             Spacer(modifier = Modifier.height(20.dp))
 
-            // Stats
+            // --- STATISTIK REAL ---
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 StatItem(journals.size.toString(), "Entries")
-                StatItem("0", "Words") // Bisa dikembangkan nanti
-                StatItem("0", "Days")
+                StatItem(totalWords.toString(), "Words")
+                StatItem(totalDays.toString(), "Days")
             }
 
             Spacer(modifier = Modifier.height(24.dp))
-            Text("Your Entries", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 18.sp)
+
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("Your Entries", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 18.sp)
+                if (searchQuery.isNotEmpty()) {
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("(Filtered)", color = Color.Gray, fontSize = 14.sp)
+                }
+            }
+
             Spacer(modifier = Modifier.height(12.dp))
 
             // List Journal
-            LazyColumn(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                items(journals) { journal ->
-                    JournalCard(
-                        journal = journal,
-                        onDelete = { viewModel.deleteJournal(journal) },
-                        onEdit = { onNavigateToEdit(journal.id) }
+            if (journals.isEmpty()) {
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Text(
+                        text = if (searchQuery.isNotEmpty()) "No journals found." else "Start your journey by adding a new entry!",
+                        color = Color.Gray
                     )
+                }
+            } else {
+                LazyColumn(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                    items(journals) { journal ->
+                        JournalCard(
+                            journal = journal,
+                            onDelete = { viewModel.deleteJournal(journal) },
+                            onEdit = { onNavigateToEdit(journal.id) }
+                        )
+                    }
                 }
             }
         }
@@ -103,8 +148,8 @@ fun HomeScreen(
 
 @Composable
 fun StatItem(count: String, label: String) {
-    Column {
-        Text(count, color = Color(0xFF6C5DD3), fontWeight = FontWeight.Bold, fontSize = 18.sp)
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Text(count, color = Color(0xFF6C5DD3), fontWeight = FontWeight.Bold, fontSize = 20.sp)
         Text(label, color = Color.Gray, fontSize = 12.sp)
     }
 }
@@ -142,8 +187,9 @@ fun JournalCard(
                             .background(Color.DarkGray)
                     )
                 } else {
+                    // PERBAIKAN: Menggunakan Text sebagai fallback, bukan Icon Image yang error
                     Box(Modifier.weight(1f).fillMaxHeight().background(Color(0xFF2C2C2C)), contentAlignment = Alignment.Center) {
-                        Text("No Photo", color = Color.Gray)
+                        Text("No Photo", color = Color.Gray, fontSize = 12.sp)
                     }
                 }
 
@@ -180,7 +226,7 @@ fun JournalCard(
                         )
                     } else {
                         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                            Text("No Location", color = Color.Gray, fontSize = 12.sp)
+                            Text("No Location", color = Color.Gray, fontSize = 10.sp)
                         }
                     }
                 }
@@ -191,7 +237,7 @@ fun JournalCard(
             // Judul
             Text(journal.title, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp)
 
-            // Lokasi (jika ada)
+            // Lokasi
             if (journal.locationName != null && journal.locationName != "Unknown Location" && journal.locationName != "No Location") {
                 Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(vertical = 4.dp)) {
                     Icon(Icons.Default.LocationOn, contentDescription = null, tint = Color(0xFF6C5DD3), modifier = Modifier.size(14.dp))
@@ -211,8 +257,8 @@ fun JournalCard(
 
             Spacer(modifier = Modifier.height(12.dp))
 
-            // Footer: Tanggal & Menu Dropdown
-            val dateFormat = SimpleDateFormat("EEEE, dd MMM", Locale.getDefault())
+            // Footer
+            val dateFormat = SimpleDateFormat("EEEE, dd MMM yyyy", Locale.getDefault())
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -220,7 +266,6 @@ fun JournalCard(
             ) {
                 Text(dateFormat.format(journal.date), color = Color.Gray, fontSize = 12.sp)
 
-                // --- MENU DROPDOWN (EDIT / DELETE) ---
                 Box {
                     IconButton(onClick = { expanded = true }) {
                         Icon(Icons.Default.MoreVert, contentDescription = "Menu", tint = Color.Gray, modifier = Modifier.size(16.dp))
@@ -232,19 +277,18 @@ fun JournalCard(
                     ) {
                         DropdownMenuItem(
                             text = { Text("Edit", color = Color.White) },
-                            onClick = {
-                                expanded = false
-                                onEdit()
-                            },
+                            onClick = { expanded = false; onEdit() },
                             leadingIcon = { Icon(Icons.Default.Edit, null, tint = Color.White) }
                         )
                         DropdownMenuItem(
                             text = { Text("Delete", color = Color(0xFFFF5555)) },
-                            onClick = {
-                                expanded = false
-                                onDelete()
-                            },
+                            onClick = { expanded = false; onDelete() },
                             leadingIcon = { Icon(Icons.Default.Delete, null, tint = Color(0xFFFF5555)) }
+                        )
+                        DropdownMenuItem(
+                            text = { Text("Export PDF", color = Color.Cyan) },
+                            onClick = { expanded = false },
+                            leadingIcon = { Icon(Icons.Default.Share, null, tint = Color.Cyan) }
                         )
                     }
                 }
